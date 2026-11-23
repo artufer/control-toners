@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de toners del Pabellón Niño Jesús</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
+        h1 { text-align: center; color: #2c3e50; }
+        h2 { color: #34495e; margin-bottom: 20px; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid #ddd; flex-wrap: wrap; }
+        .tab-btn { padding: 12px 20px; cursor: pointer; background: #d5d8dc; border: none; border-radius: 8px 8px 0 0; font-weight: bold; font-size: 14px; color: #1a1a1a; transition: all 0.2s ease; }
+        .tab-btn:hover { background: #bdc3c7; }
+        .tab-btn.active { background: #3498db; color: #ffffff; }
+        .tab-content { display: none; background: white; padding: 20px; border-radius: 0 5px 5px 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .tab-content.active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: flex-end; }
+        form div { display: flex; flex-direction: column; }
+        input, select, button { padding: 8px; font-size: 14px; }
+        button { cursor: pointer; border: none; border-radius: 4px; color: white; }
+        .btn-add { background-color: #2ecc71; }
+        .btn-save { background-color: #3498db; }
+        .btn-delete { background-color: #e74c3c; padding: 5px 10px; font-size: 12px; margin-left: 5px;}
+        .color-selector { display: none; }
+        .color-selector.visible { display: flex; }
+        select { min-width: 200px; }
+        
+        .app-notification { position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 8px; color: white; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000; opacity: 0; transform: translateX(100%); transition: all 0.3s ease; max-width: 400px; }
+        .app-notification.show { opacity: 1; transform: translateX(0); }
+        .app-notification.error { background-color: #e74c3c; }
+        .app-notification.success { background-color: #2ecc71; }
+        .app-notification.info { background-color: #3498db; }
+        .app-notification.loading { background-color: #f39c12; }
+        
+        .stock-low { color: #e74c3c; font-weight: bold; }
+        .stock-ok { color: #2ecc71; font-weight: bold; }
+        .stock-zero { color: #95a5a6; font-style: italic; }
+        .filter-container { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .filter-container label { font-weight: bold; }
+
+        /* Modal de confirmación */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-overlay.show { display: flex; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); max-width: 450px; width: 90%; text-align: center; animation: modalSlideIn 0.3s ease; }
+        @keyframes modalSlideIn { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-icon { font-size: 48px; margin-bottom: 15px; }
+        .modal-title { font-size: 20px; font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
+        .modal-message { font-size: 16px; color: #555; margin-bottom: 25px; line-height: 1.5; }
+        .modal-buttons { display: flex; gap: 15px; justify-content: center; }
+        .modal-btn { padding: 10px 25px; font-size: 14px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s ease; }
+        .modal-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .modal-btn-confirm { background-color: #e74c3c; color: white; }
+        .modal-btn-cancel { background-color: #95a5a6; color: white; }
+
+        /* Loader */
+        #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 3000; display: flex; justify-content: center; align-items: center; font-size: 24px; color: #3498db; font-weight: bold; }
+        #loader.hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="loader">⏳ Cargando datos desde la nube...</div>
+    <div id="notification-container"></div>
+
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-icon" id="modal-icon">⚠️</div>
+            <div class="modal-title" id="modal-title">Confirmar acción</div>
+            <div class="modal-message" id="modal-message">¿Estás seguro?</div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="modal-cancel-btn">Cancelar</button>
+                <button class="modal-btn modal-btn-confirm" id="modal-confirm-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <h1>️ Gestión de toners del Pabellón Niño Jesús</h1>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab(event, 'tab-copiers')">🖨️ Fotocopiadoras</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-stock')">📦 Stock</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-change')">🔄 Cambio de Tóner</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-history-in')">📥 Histórico Entradas</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-history-out')">📤 Histórico Cambios</button>
+    </div>
+
+    <!-- TAB 1: FOTOCOPIADORAS -->
+    <div id="tab-copiers" class="tab-content active">
+        <h2>Gestión de Fotocopiadoras</h2>
+        <form onsubmit="addCopier(event)">
+            <div><label>Referencia</label><input type="text" id="cop-ref" required placeholder="Ej: R4Q9Z31981 o RFH9817236" oninput="autoDetectType()"></div>
+            <div><label>Oficina / Ubicación</label><input type="text" id="cop-off" required></div>
+            <div><label>Tipo</label><input type="text" id="cop-type" readonly placeholder="Se detecta automáticamente"></div>
+            <button type="submit" class="btn-add">➕ Añadir fotocopiadora</button>
+        </form>
+        <table>
+            <thead><tr><th>Referencia</th><th>Oficina</th><th>Tipo</th><th>Stock disponible</th><th>Acciones</th></tr></thead>
+            <tbody id="table-copiers"></tbody>
+        </table>
+    </div>
+
+    <!-- TAB 2: STOCK -->
+    <div id="tab-stock" class="tab-content">
+        <h2>Stock de Tóners (recibidos, sin instalar)</h2>
+        <form onsubmit="addStock(event)">
+            <div>
+                <label>Fotocopiadora asignada</label>
+                <select id="stock-copier" required onchange="updateStockColorSelector()">
+                    <option value="">-- Seleccionar fotocopiadora --</option>
+                </select>
+            </div>
+            <div id="stock-color-container" class="color-selector">
+                <label>Color del tóner</label>
+                <select id="stock-color">
+                    <option value="Negro">Negro</option>
+                    <option value="Azul">Azul (Cyan)</option>
+                    <option value="Magenta">Magenta</option>
+                    <option value="Amarillo">Amarillo</option>
+                </select>
+            </div>
+            <div><label>Fecha de recepción</label><input type="date" id="stock-date" required></div>
+            <div><label>Cantidad</label><input type="number" id="stock-qty" min="1" value="1" required></div>
+            <button type="submit" class="btn-add">➕ Registrar entrada de tóner</button>
+        </form>
+        <table>
+            <thead><tr><th>Fotocopiadora</th><th>Color</th><th>Fecha recepción</th><th>Cantidad</th><th>Acciones</th></tr></thead>
+            <tbody id="table-stock"></tbody>
+        </table>
+    </div>
+
+    <!-- TAB 3: CAMBIO -->
+    <div id="tab-change" class="tab-content">
+        <h2>Registrar Cambio de Tóner</h2>
+        <form onsubmit="addChange(event)">
+            <div>
+                <label>Fotocopiadora</label>
+                <select id="ch-copier" required onchange="updateChangeColorSelector()">
+                    <option value="">-- Seleccionar fotocopiadora --</option>
+                </select>
+            </div>
+            <div id="change-color-container" class="color-selector">
+                <label>Color del tóner a cambiar</label>
+                <select id="ch-color">
+                    <option value="Negro">Negro</option>
+                    <option value="Azul">Azul (Cyan)</option>
+                    <option value="Magenta">Magenta</option>
+                    <option value="Amarillo">Amarillo</option>
+                </select>
+            </div>
+            <div><label>Fecha del cambio</label><input type="date" id="ch-date" required></div>
+            <div>
+                <label>Persona que realiza el cambio</label>
+                <select id="ch-person" required>
+                    <option value="">-- Seleccionar --</option>
+                    <option>Arturo</option>
+                    <option>Elena</option>
+                    <option>Carlos</option>
+                    <option>Merce</option>
+                </select>
+            </div>
+            <button type="submit" class="btn-save">✅ Registrar cambio</button>
+        </form>
+    </div>
+
+    <!-- TAB 4: HISTÓRICO ENTRADAS -->
+    <div id="tab-history-in" class="tab-content">
+        <h2>📥 Histórico de Entradas de Stock</h2>
+        <div class="filter-container">
+            <label for="hist-in-filter">Selecciona una fotocopiadora:</label>
+            <select id="hist-in-filter" onchange="renderHistoryIn()">
+                <option value="all">-- Todas --</option>
+            </select>
+        </div>
+        <table>
+            <thead><tr><th>Fecha</th><th>Fotocopiadora</th><th>Color</th><th>Cantidad</th><th>Acciones</th></tr></thead>
+            <tbody id="table-stock-history"></tbody>
+        </table>
+    </div>
+
+    <!-- TAB 5: HISTÓRICO CAMBIOS -->
+    <div id="tab-history-out" class="tab-content">
+        <h2>📤 Histórico de Cambios de Tóner</h2>
+        <div class="filter-container">
+            <label for="hist-filter">Selecciona una fotocopiadora:</label>
+            <select id="hist-filter" onchange="renderHistoryOut()">
+                <option value="all">-- Todas --</option>
+            </select>
+        </div>
+        <table>
+            <thead><tr><th>Fecha</th><th>Fotocopiadora</th><th>Persona</th><th>Tipo</th><th>Color</th><th>Acciones</th></tr></thead>
+            <tbody id="table-history"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // ⚠️ PEGA AQUÍ LA URL DE TU APLICACIÓN WEB DE GOOGLE APPS SCRIPT
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyuHT9ef-IVgNg0Uwu4bXKX-3V3IJhWmr9nngG66Hh0NM3CeEr0pRHLpn_IZ5WpSj4N/exec';
+
+        // --- BASE DE DATOS EN MEMORIA ---
+        let copiers = [];
+        let stock = [];
+        let changes = [];
+
+        // --- NUEVA FUNCIÓN: Formatear fecha de AAAA-MM-DD a DD/MM/AAAA ---
+        function formatearFecha(fecha) {
+            if (!fecha) return '';
+            const partes = fecha.split('-');
+            if (partes.length !== 3) return fecha;
+            return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+
+        // --- CONEXIÓN CON GOOGLE SHEETS ---
+        async function cargarDatos() {
+            try {
+                const res = await fetch(GOOGLE_SCRIPT_URL);
+                const datos = await res.json();
+                copiers = datos.copiers || [];
+                stock = datos.stock || [];
+                changes = datos.changes || [];
+                document.getElementById('loader').classList.add('hidden');
+            } catch (e) {
+                console.error('Error al cargar datos:', e);
+                showNotification('Error al conectar con Google Sheets. Revisa la URL.', 'error');
+                document.getElementById('loader').classList.add('hidden');
+            }
+        }
+
+        async function guardarDatos() {
+            showNotification('💾 Guardando en la nube...', 'info');
+            try {
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ copiers, stock, changes })
+                });
+                showNotification('✅ Datos guardados correctamente', 'success');
+            } catch (e) {
+                console.error('Error al guardar:', e);
+                showNotification('❌ Error al guardar en la nube', 'error');
+            }
+        }
+
+        // --- SISTEMA DE NOTIFICACIONES ---
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `app-notification ${type}`;
+            notification.textContent = message;
+            container.appendChild(notification);
+            setTimeout(() => notification.classList.add('show'), 10);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3500);
+        }
+
+        // --- SISTEMA DE CONFIRMACIÓN ---
+        function showConfirm(message, title = 'Confirmar acción', icon = '⚠️') {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('confirm-modal');
+                document.getElementById('modal-title').textContent = title;
+                document.getElementById('modal-message').textContent = message;
+                document.getElementById('modal-icon').textContent = icon;
+                modal.classList.add('show');
+
+                const cleanup = () => {
+                    modal.classList.remove('show');
+                    confirmBtn.removeEventListener('click', onConfirm);
+                    cancelBtn.removeEventListener('click', onCancel);
+                };
+                const confirmBtn = document.getElementById('modal-confirm-btn');
+                const cancelBtn = document.getElementById('modal-cancel-btn');
+                const onConfirm = () => { cleanup(); resolve(true); };
+                const onCancel = () => { cleanup(); resolve(false); };
+
+                confirmBtn.addEventListener('click', onConfirm);
+                cancelBtn.addEventListener('click', onCancel);
+            });
+        }
+
+        // --- LÓGICA DE STOCK ---
+        function getAvailableStock(copierId, color) {
+            return stock.filter(s => s.copierId === copierId && s.color === color).reduce((sum, s) => sum + parseInt(s.qty), 0);
+        }
+
+        function getTotalStock(copierId) {
+            const copier = copiers.find(c => c.id === copierId);
+            if (!copier) return 0;
+            if (copier.type === 'Color') {
+                return ['Negro', 'Azul', 'Magenta', 'Amarillo'].reduce((sum, color) => sum + getAvailableStock(copierId, color), 0);
+            } else {
+                return getAvailableStock(copierId, 'Negro');
+            }
+        }
+
+        function autoDetectType() {
+            const ref = document.getElementById('cop-ref').value.toUpperCase();
+            const typeField = document.getElementById('cop-type');
+            if (ref.startsWith('RFH')) typeField.value = 'Color';
+            else if (ref.startsWith('R4Q9')) typeField.value = 'Blanco y Negro';
+            else typeField.value = '';
+        }
+
+        function updateStockColorSelector() {
+            const copierId = parseInt(document.getElementById('stock-copier').value);
+            const copier = copiers.find(c => c.id === copierId);
+            document.getElementById('stock-color-container').classList.toggle('visible', copier && copier.type === 'Color');
+        }
+
+        function updateChangeColorSelector() {
+            const copierId = parseInt(document.getElementById('ch-copier').value);
+            const copier = copiers.find(c => c.id === copierId);
+            document.getElementById('change-color-container').classList.toggle('visible', copier && copier.type === 'Color');
+        }
+
+        function openTab(evt, tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            evt.currentTarget.classList.add('active');
+            renderAll();
+        }
+
+        // --- ACCIONES ---
+        async function addCopier(e) {
+            e.preventDefault();
+            copiers.push({
+                id: Date.now(),
+                ref: document.getElementById('cop-ref').value,
+                off: document.getElementById('cop-off').value,
+                type: document.getElementById('cop-type').value
+            });
+            await guardarDatos();
+            renderAll(); 
+            e.target.reset();
+        }
+
+        async function deleteCopier(id) {
+            const confirmed = await showConfirm('¿Borrar esta fotocopiadora?', 'Borrar fotocopiadora', '🗑️');
+            if (confirmed) {
+                copiers = copiers.filter(c => c.id !== id);
+                await guardarDatos();
+                renderAll();
+            }
+        }
+
+        function renderCopiers() {
+            const tbody = document.getElementById('table-copiers');
+            tbody.innerHTML = copiers.map(c => {
+                const totalStock = getTotalStock(c.id);
+                let stockClass = 'stock-ok', stockText = `${totalStock} tóner(s)`;
+                if (totalStock === 0) { stockClass = 'stock-zero'; stockText = 'Sin stock'; }
+                else if (totalStock <= 1) stockClass = 'stock-low';
+                
+                return `<tr>
+                    <td>${c.ref}</td><td>${c.off}</td><td>${c.type}</td>
+                    <td class="${stockClass}">${stockText}</td>
+                    <td><button class="btn-delete" onclick="deleteCopier(${c.id})">🗑️ Borrar</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function addStock(e) {
+            e.preventDefault();
+            const copierId = parseInt(document.getElementById('stock-copier').value);
+            const copier = copiers.find(c => c.id === copierId);
+            const color = copier && copier.type === 'Color' ? document.getElementById('stock-color').value : 'Negro';
+            
+            stock.push({
+                id: Date.now(), copierId, color,
+                date: document.getElementById('stock-date').value,
+                qty: document.getElementById('stock-qty').value
+            });
+            await guardarDatos();
+            renderAll(); 
+            e.target.reset();
+        }
+
+        async function deleteStock(id) {
+            const confirmed = await showConfirm('¿Borrar esta entrada de stock?', 'Borrar entrada', '📦');
+            if (confirmed) {
+                stock = stock.filter(s => s.id !== id);
+                await guardarDatos();
+                renderAll();
+            }
+        }
+
+        function renderStock() {
+            const tbody = document.getElementById('table-stock');
+            tbody.innerHTML = stock.map(s => {
+                const copier = copiers.find(c => c.id === s.copierId);
+                const copierName = copier ? `${copier.ref} - ${copier.off}` : 'Desconocida';
+                return `<tr>
+                    <td>${copierName}</td><td>${s.color}</td><td>${formatearFecha(s.date)}</td><td>${s.qty}</td>
+                    <td><button class="btn-delete" onclick="deleteStock(${s.id})">🗑️ Borrar</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function addChange(e) {
+            e.preventDefault();
+            const copierId = parseInt(document.getElementById('ch-copier').value);
+            const copier = copiers.find(c => c.id === copierId);
+            
+            if (!copier) { showNotification('Esta fotocopiadora no existe', 'error'); return; }
+            
+            const color = copier.type === 'Color' ? document.getElementById('ch-color').value : 'Negro';
+            const availableStock = getAvailableStock(copierId, color);
+            
+            if (availableStock <= 0) {
+                showNotification(`No hay tóners ${color} disponibles para ${copier.off}.`, 'error');
+                return;
+            }
+            
+            // Dar de baja 1 unidad del stock real
+            const stockEntry = stock.find(s => s.copierId === copierId && s.color === color && parseInt(s.qty) > 0);
+            if (stockEntry) {
+                stockEntry.qty = parseInt(stockEntry.qty) - 1;
+                if (stockEntry.qty <= 0) {
+                    stock = stock.filter(s => s.id !== stockEntry.id);
+                }
+            }
+            
+            changes.push({
+                id: Date.now(), copierId,
+                date: document.getElementById('ch-date').value,
+                person: document.getElementById('ch-person').value,
+                type: copier.type, color
+            });
+            await guardarDatos();
+            renderAll(); 
+            e.target.reset();
+        }
+
+        async function deleteChange(id) {
+            const confirmed = await showConfirm('¿Borrar este cambio? Se devolverá 1 unidad al stock.', 'Borrar cambio', '🔄');
+            if (confirmed) {
+                const changeToDelete = changes.find(c => c.id === id);
+                
+                if (changeToDelete) {
+                    let stockEntry = stock.find(s => s.copierId === changeToDelete.copierId && s.color === changeToDelete.color);
+                    
+                    if (stockEntry) {
+                        stockEntry.qty = parseInt(stockEntry.qty) + 1;
+                    } else {
+                        stock.push({
+                            id: Date.now(),
+                            copierId: changeToDelete.copierId,
+                            color: changeToDelete.color,
+                            date: changeToDelete.date,
+                            qty: 1
+                        });
+                    }
+                }
+                
+                changes = changes.filter(c => c.id !== id);
+                await guardarDatos();
+                renderAll();
+            }
+        }
+
+        function renderHistoryIn() {
+            const filter = document.getElementById('hist-in-filter').value;
+            let filtered = filter === 'all' ? stock : stock.filter(s => s.copierId == filter);
+            document.getElementById('table-stock-history').innerHTML = filtered.map(s => {
+                const copier = copiers.find(c => c.id === s.copierId);
+                return `<tr>
+                    <td>${formatearFecha(s.date)}</td><td>${copier ? copier.ref + ' - ' + copier.off : 'Desconocida'}</td>
+                    <td>${s.color}</td><td>${s.qty}</td>
+                    <td><button class="btn-delete" onclick="deleteStock(${s.id})">🗑️ Borrar</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderHistoryOut() {
+            const filter = document.getElementById('hist-filter').value;
+            let filtered = filter === 'all' ? changes : changes.filter(c => c.copierId == filter);
+            document.getElementById('table-history').innerHTML = filtered.map(c => {
+                const copier = copiers.find(co => co.id == c.copierId);
+                return `<tr>
+                    <td>${formatearFecha(c.date)}</td><td>${copier ? copier.ref + ' - ' + copier.off : 'Desconocida'}</td>
+                    <td>${c.person}</td><td>${c.type}</td><td>${c.color}</td>
+                    <td><button class="btn-delete" onclick="deleteChange(${c.id})">🗑️ Borrar</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function updateCopierSelectors() {
+            const selectors = ['stock-copier', 'ch-copier', 'hist-in-filter', 'hist-filter'];
+            selectors.forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const currentVal = sel.value;
+                const isFilter = id.startsWith('hist');
+                sel.innerHTML = isFilter ? '<option value="all">-- Todas --</option>' : '<option value="">-- Seleccionar --</option>';
+                copiers.forEach(c => {
+                    sel.innerHTML += `<option value="${c.id}">${c.ref} - ${c.off} (${c.type}) [Stock: ${getTotalStock(c.id)}]</option>`;
+                });
+                sel.value = currentVal;
+            });
+        }
+
+        function renderAll() {
+            renderCopiers(); renderStock(); renderHistoryIn(); renderHistoryOut(); updateCopierSelectors();
+        }
+
+        // --- INICIALIZACIÓN ---
+        cargarDatos().then(renderAll);
+    </script>
+</body>
+</html>
